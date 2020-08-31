@@ -1,0 +1,15 @@
+I"'<h2 id="前言">前言</h2>
+<p>假设只有两个标签1和0，  。
+我们把采集到的任何一组样本看做一个事件的话，那么这个事件发生的概率假设为p。
+我们的模型y的值等于标签为1的概率也就是p。
+\(P(y_{i}|x_{i})=p^{y_{i}}(1-p)^{1-y_{i}}\)</p>
+
+<p>##LR似然函数推导</p>
+
+<p><img src="../pictures/LR/LR1.png" alt="avatar" /></p>
+
+<p><img src="../pictures/LR/LR2.png" alt="avatar" /></p>
+
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default"></script>
+
+:ET
