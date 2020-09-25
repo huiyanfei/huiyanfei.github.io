@@ -10,8 +10,8 @@ tags:
     - Blog
 ---
 
-![avatar](../pictures/sigmoid/sigmod1.png)
-![avatar](../pictures/sigmoid/sigmod2.png)
-![avatar](../pictures/sigmoid/sigmod3.png)
-![avatar](../pictures/sigmoid/sigmod4.png)
-![avatar](../pictures/sigmoid/sigmod5.png) 
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/sigmoid/sigmod1.png)
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/sigmoid/sigmod2.png)
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/sigmoid/sigmod3.png)
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/sigmoid/sigmod4.png)
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/sigmoid/sigmod5.png) 
