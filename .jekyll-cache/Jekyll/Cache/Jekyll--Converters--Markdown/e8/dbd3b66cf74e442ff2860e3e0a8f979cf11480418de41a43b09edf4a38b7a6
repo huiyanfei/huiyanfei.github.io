@@ -1,0 +1,179 @@
+I"��<p>##前言
+RE2，简称 <code class="language-plaintext highlighter-rouge">"Simple and Effective Text Matching with Richer Alignment Features"</code>.</p>
+
+<p> 文中提出了一种快速、强悍神经网络方法来用于通用文本的匹配。
+我们研究了构建一个快速且性能良好的文本匹配模型的足够条件，
+并建议保持三个用于序列间对齐的关键特性:原始点对齐特性、先前对齐特性和上下文特性，
+同时简化所有剩余组件。我们在自然语言推理、意图识别和答案选择等任务中，
+对4个研究良好的基准数据集进行了实验。我们的模型性能与最先进的模型相当，
+并且使用的参数更少，除此之外，在推理速度方面与类似模型的相比，至少要快6倍。</p>
+
+<p>##1.模型整体结构</p>
+
+<p><img src="../pictures/RE2/RE2_1.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s">'text1'</span><span class="p">]</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s">'text2'</span><span class="p">]</span>
+    <span class="n">mask_a</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s">'mask1'</span><span class="p">]</span>
+    <span class="n">mask_b</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s">'mask2'</span><span class="p">]</span>
+
+    <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+    <span class="n">res_a</span><span class="p">,</span> <span class="n">res_b</span> <span class="o">=</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">block</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">blocks</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">connection</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">res_a</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">connection</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">res_b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+            <span class="n">res_a</span><span class="p">,</span> <span class="n">res_b</span> <span class="o">=</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span>
+        <span class="n">a_enc</span> <span class="o">=</span> <span class="n">block</span><span class="p">[</span><span class="s">'encoder'</span><span class="p">](</span><span class="n">a</span><span class="p">,</span> <span class="n">mask_a</span><span class="p">)</span>
+        <span class="n">b_enc</span> <span class="o">=</span> <span class="n">block</span><span class="p">[</span><span class="s">'encoder'</span><span class="p">](</span><span class="n">b</span><span class="p">,</span> <span class="n">mask_b</span><span class="p">)</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">a_enc</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">b</span><span class="p">,</span> <span class="n">b_enc</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">align_a</span><span class="p">,</span> <span class="n">align_b</span> <span class="o">=</span> <span class="n">block</span><span class="p">[</span><span class="s">'alignment'</span><span class="p">](</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">mask_a</span><span class="p">,</span> <span class="n">mask_b</span><span class="p">)</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">block</span><span class="p">[</span><span class="s">'fusion'</span><span class="p">](</span><span class="n">a</span><span class="p">,</span> <span class="n">align_a</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">block</span><span class="p">[</span><span class="s">'fusion'</span><span class="p">](</span><span class="n">b</span><span class="p">,</span> <span class="n">align_b</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">pooling</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">mask_a</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">pooling</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">mask_b</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">prediction</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>##2.编码层(Encoder)</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Encoder</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">input_size</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">dropout</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">encoders</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">ModuleList</span><span class="p">([</span><span class="n">Conv1d</span><span class="p">(</span>
+                <span class="n">in_channels</span><span class="o">=</span><span class="n">input_size</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span>
+                <span class="n">out_channels</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span>
+                <span class="n">kernel_sizes</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">kernel_sizes</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">enc_layers</span><span class="p">)])</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># B x C x L
+</span>        <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">encoder</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">encoders</span><span class="p">):</span>
+            <span class="n">x</span><span class="p">.</span><span class="n">masked_fill_</span><span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">,</span> <span class="mf">0.</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">dropout</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">training</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">encoder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">dropout</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">training</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># B x L x C
+</span></code></pre></div></div>
+
+<p>##3.增强残差连接(Augmented Residual Connections)</p>
+
+<p><img src="../pictures/RE2/RE2_2.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">AugmentedResidual</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">res</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># res is embedding
+</span>        <span class="n">hidden_size</span> <span class="o">=</span> <span class="n">x</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">res</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:</span><span class="n">hidden_size</span><span class="p">]</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="p">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">res</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">hidden_size</span><span class="p">:]],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># latter half of res is embedding
+</span>
+</code></pre></div></div>
+
+<p>##4.对齐层(Alignment Layer)</p>
+
+<p><img src="../pictures/RE2/RE2_3.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Alignment</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">__</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">temperature</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">math</span><span class="p">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">_attention</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="p">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="o">*</span> <span class="bp">self</span><span class="p">.</span><span class="n">temperature</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">mask_a</span><span class="p">,</span> <span class="n">mask_b</span><span class="p">):</span>
+        <span class="n">attn</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_attention</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">mask_a</span><span class="p">.</span><span class="nb">float</span><span class="p">(),</span> <span class="n">mask_b</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">).</span><span class="nb">float</span><span class="p">()).</span><span class="n">byte</span><span class="p">()</span>
+        <span class="n">attn</span><span class="p">.</span><span class="n">masked_fill_</span><span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">,</span> <span class="o">-</span><span class="mf">1e7</span><span class="p">)</span>
+        <span class="n">attn_a</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">attn</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">attn_b</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">attn</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">feature_b</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">attn_a</span><span class="p">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">a</span><span class="p">)</span>
+        <span class="n">feature_a</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">attn_b</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">add_summary</span><span class="p">(</span><span class="s">'temperature'</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">temperature</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">add_summary</span><span class="p">(</span><span class="s">'attention_a'</span><span class="p">,</span> <span class="n">attn_a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">add_summary</span><span class="p">(</span><span class="s">'attention_b'</span><span class="p">,</span> <span class="n">attn_b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">feature_a</span><span class="p">,</span> <span class="n">feature_b</span>
+</code></pre></div></div>
+
+<p>#5.融合层(Fusion Layer)</p>
+
+<p><img src="../pictures/RE2/RE2_4.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">register</span><span class="p">(</span><span class="s">'simple'</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Fusion</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">input_size</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fusion</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">align</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">fusion</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">align</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+
+
+<span class="o">@</span><span class="n">register</span><span class="p">(</span><span class="s">'full'</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">FullFusion</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">input_size</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">dropout</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fusion1</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fusion2</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fusion3</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fusion</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">align</span><span class="p">):</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fusion1</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">align</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">x2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fusion2</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span> <span class="o">-</span> <span class="n">align</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">x3</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fusion3</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span> <span class="o">*</span> <span class="n">align</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">x3</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="n">dropout</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">dropout</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">training</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">fusion</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>#6.池化层(Pooling Layer)</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Pooling</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">.</span><span class="n">masked_fill_</span><span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">,</span> <span class="o">-</span><span class="nb">float</span><span class="p">(</span><span class="s">'inf'</span><span class="p">)).</span><span class="nb">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div></div>
+
+<p>#7.预测层(Prediction Layer)</p>
+
+<p><img src="../pictures/RE2/RE2_5.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">register</span><span class="p">(</span><span class="s">'simple'</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Prediction</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">inp_features</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">dense</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">dropout</span><span class="p">),</span>
+            <span class="n">Linear</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span> <span class="o">*</span> <span class="n">inp_features</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">activations</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">dropout</span><span class="p">),</span>
+            <span class="n">Linear</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num_classes</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">dense</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+
+
+<span class="o">@</span><span class="n">register</span><span class="p">(</span><span class="s">'full'</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">AdvancedPrediction</span><span class="p">(</span><span class="n">Prediction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">inp_features</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">dense</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+
+
+<span class="o">@</span><span class="n">register</span><span class="p">(</span><span class="s">'symmetric'</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SymmetricPrediction</span><span class="p">(</span><span class="n">AdvancedPrediction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">dense</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">).</span><span class="nb">abs</span><span class="p">(),</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+</code></pre></div></div>
+:ET

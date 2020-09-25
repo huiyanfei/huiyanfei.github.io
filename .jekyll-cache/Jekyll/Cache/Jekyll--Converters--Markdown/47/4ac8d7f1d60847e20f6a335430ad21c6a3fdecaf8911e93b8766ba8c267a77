@@ -1,0 +1,139 @@
+I"S<p>##前言</p>
+
+<p>##1.模型整体思想
+<code class="language-plaintext highlighter-rouge">VAE本质上就是在我们常规的自编码器的基础上，对encoder的结果（在VAE中对应着计算均值的网络）加上了“高斯噪声”，
+使得结果decoder能够对噪声有鲁棒性；而那个额外的KL loss（目的是让均值为0，方差为1），
+事实上就是相当于对encoder的一个正则项，希望encoder出来的东西均有零均值。
+那另外一个encoder（对应着计算方差的网络）的作用呢？它是用来动态调节噪声的强度的。
+直觉上来想，当decoder还没有训练好时（重构误差远大于KL loss），就会适当降低噪声（KL loss增加，
+注意KL loss等于0表示分布就是标准正态分布），使得拟合起来容易一些（重构误差开始下降）；
+反之，如果decoder训练得还不错时（重构误差小于KL loss），这时候噪声就会增加（KL loss减少），
+使得拟合更加困难了（重构误差又开始增加），这时候decoder就要想办法提高它的生成能力了。
+说白了，重构的过程是希望没噪声的，而KL loss则希望有高斯噪声的，两者是对立的。
+所以，VAE跟GAN一样，内部其实是包含了一个对抗的过程，只不过它们两者是混合起来，共同进化的。</code></p>
+
+<p><img src="../pictures/VAE/VAE1.png" alt="avatar" />
+<img src="../pictures/VAE/VAE2.png" alt="avatar" />
+<img src="../pictures/VAE/VAE3.png" alt="avatar" />
+<img src="../pictures/VAE/VAE4.png" alt="avatar" />
+<img src="../pictures/VAE/VAE5.png" alt="avatar" />
+<img src="../pictures/VAE/VAE6.png" alt="avatar" />
+<img src="../pictures/VAE/VAE7.png" alt="avatar" />
+<img src="../pictures/VAE/VAE8.png" alt="avatar" />
+<img src="../pictures/VAE/VAE9.png" alt="avatar" />
+<img src="../pictures/VAE/VAE10.png" alt="avatar" />
+<img src="../pictures/VAE/VAE11.png" alt="avatar" />
+<img src="../pictures/VAE/VAE12.png" alt="avatar" />
+<img src="../pictures/VAE/VAE13.png" alt="avatar" />
+<img src="../pictures/VAE/VAE14.png" alt="avatar" /></p>
+
+<p>##VAE源码</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="k">class</span> <span class="nc">Normal</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mu</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">log_sigma</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">mu</span> <span class="o">=</span> <span class="n">mu</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span>  <span class="c1"># either stdev diagonal itself, or stdev diagonal from decomposition
+</span>        <span class="bp">self</span><span class="p">.</span><span class="n">logsigma</span> <span class="o">=</span> <span class="n">log_sigma</span>
+        <span class="n">dim</span> <span class="o">=</span> <span class="n">mu</span><span class="p">.</span><span class="n">get_shape</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="o">*</span><span class="n">dim</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="o">*</span><span class="n">dim</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">r</span> <span class="o">=</span> <span class="n">r</span>
+
+
+<span class="k">class</span> <span class="nc">Encoder</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">D_in</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">D_out</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Encoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">).</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">linear1</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">D_in</span><span class="p">,</span> <span class="n">H</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">linear2</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">D_out</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">F</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">linear1</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">F</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">linear2</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">Decoder</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">D_in</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">D_out</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Decoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">).</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">linear1</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">D_in</span><span class="p">,</span> <span class="n">H</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">linear2</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">D_out</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">F</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">linear1</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">F</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">linear2</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">VAE</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="n">latent_dim</span> <span class="o">=</span> <span class="mi">8</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encoder</span><span class="p">,</span> <span class="n">decoder</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">VAE</span><span class="p">,</span> <span class="bp">self</span><span class="p">).</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">encoder</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">decoder</span> <span class="o">=</span> <span class="n">decoder</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">_enc_mu</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">_enc_log_sigma</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_sample_latent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">h_enc</span><span class="p">):</span>
+        <span class="s">"""
+        Return the latent normal sample z ~ N(mu, sigma^2)
+        """</span>
+        <span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_enc_mu</span><span class="p">(</span><span class="n">h_enc</span><span class="p">)</span>
+        <span class="n">log_sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_enc_log_sigma</span><span class="p">(</span><span class="n">h_enc</span><span class="p">)</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">exp</span><span class="p">(</span><span class="n">log_sigma</span><span class="p">)</span>
+        <span class="n">std_z</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">sigma</span><span class="p">.</span><span class="n">size</span><span class="p">())).</span><span class="nb">float</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="p">.</span><span class="n">z_mean</span> <span class="o">=</span> <span class="n">mu</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">z_sigma</span> <span class="o">=</span> <span class="n">sigma</span>
+
+        <span class="k">return</span> <span class="n">mu</span> <span class="o">+</span> <span class="n">sigma</span> <span class="o">*</span> <span class="n">Variable</span><span class="p">(</span><span class="n">std_z</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>  <span class="c1"># Reparameterization trick
+</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">h_enc</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">encoder</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_sample_latent</span><span class="p">(</span><span class="n">h_enc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">.</span><span class="n">decoder</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+
+<span class="c1">#这部分是编码器生成与正态分布的差别，在loss中占一部分
+</span><span class="k">def</span> <span class="nf">latent_loss</span><span class="p">(</span><span class="n">z_mean</span><span class="p">,</span> <span class="n">z_stddev</span><span class="p">):</span> 
+    <span class="n">mean_sq</span> <span class="o">=</span> <span class="n">z_mean</span> <span class="o">*</span> <span class="n">z_mean</span>
+    <span class="n">stddev_sq</span> <span class="o">=</span> <span class="n">z_stddev</span> <span class="o">*</span> <span class="n">z_stddev</span>
+    <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">torch</span><span class="p">.</span><span class="n">mean</span><span class="p">(</span><span class="n">mean_sq</span> <span class="o">+</span> <span class="n">stddev_sq</span> <span class="o">-</span> <span class="n">torch</span><span class="p">.</span><span class="n">log</span><span class="p">(</span><span class="n">stddev_sq</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">'__main__'</span><span class="p">:</span>
+
+    <span class="n">input_dim</span> <span class="o">=</span> <span class="mi">28</span> <span class="o">*</span> <span class="mi">28</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">32</span>
+ 
+    <span class="n">mnist</span> <span class="o">=</span> <span class="n">torchvision</span><span class="p">.</span><span class="n">datasets</span><span class="p">.</span><span class="n">MNIST</span><span class="p">(</span><span class="s">'./'</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="bp">True</span> <span class="p">)</span>
+
+    <span class="n">dataloader</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">utils</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">DataLoader</span><span class="p">(</span><span class="n">mnist</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+                                             <span class="n">shuffle</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">num_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">print</span><span class="p">(</span><span class="s">'Number of samples: '</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">mnist</span><span class="p">))</span>
+
+    <span class="n">encoder</span> <span class="o">=</span> <span class="n">Encoder</span><span class="p">(</span><span class="n">input_dim</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="n">decoder</span> <span class="o">=</span> <span class="n">Decoder</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">input_dim</span><span class="p">)</span>
+    <span class="n">vae</span> <span class="o">=</span> <span class="n">VAE</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span> <span class="n">decoder</span><span class="p">)</span>
+
+    <span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">MSELoss</span><span class="p">()</span>
+
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="p">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">vae</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">)</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataloader</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">inputs</span><span class="p">,</span> <span class="n">classes</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="n">inputs</span><span class="p">,</span> <span class="n">classes</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">inputs</span><span class="p">.</span><span class="n">resize_</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">input_dim</span><span class="p">)),</span> <span class="n">Variable</span><span class="p">(</span><span class="n">classes</span><span class="p">)</span>
+            <span class="n">optimizer</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+            <span class="n">dec</span> <span class="o">=</span> <span class="n">vae</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+            <span class="n">ll</span> <span class="o">=</span> <span class="n">latent_loss</span><span class="p">(</span><span class="n">vae</span><span class="p">.</span><span class="n">z_mean</span><span class="p">,</span> <span class="n">vae</span><span class="p">.</span><span class="n">z_sigma</span><span class="p">)</span>
+            <span class="c1">#损失包含两部分，一部分是正太分布的损失，一部分是生成与预期的损失
+</span>            <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">dec</span><span class="p">,</span> <span class="n">inputs</span><span class="p">)</span> <span class="o">+</span> <span class="n">ll</span>
+            <span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">optimizer</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>
+            <span class="n">l</span> <span class="o">=</span> <span class="n">loss</span><span class="p">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">l</span><span class="p">)</span>
+
+</code></pre></div></div>
+:ET

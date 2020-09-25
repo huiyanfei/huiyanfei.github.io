@@ -1,0 +1,33 @@
+I"�<p>##前言</p>
+
+<p>重点：为什么拟合负梯度，因为如果损失是0.5*(y-y’)^2,那么损失函数的导数(即梯度)就是y-y’，正好就是‘残差’，因此叫做梯度提升，拟合负梯度值。</p>
+
+<p><img src="../pictures/GBDT/GBDT1.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT2.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT3.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT4.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT5.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT6.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT7.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT8.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT9.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT10.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT11.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT12.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT13.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT14.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT15.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT16.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT17.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT18.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT19.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT20.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT21.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT22.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT23.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT24.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT25.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT26.png" alt="avatar" />
+<img src="../pictures/GBDT/GBDT27.png" alt="avatar" /></p>
+
+:ET

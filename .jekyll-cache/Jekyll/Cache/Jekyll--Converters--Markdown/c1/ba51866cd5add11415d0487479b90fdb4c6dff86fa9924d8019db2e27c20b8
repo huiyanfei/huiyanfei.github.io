@@ -1,0 +1,166 @@
+I"V<p>##前言</p>
+
+<p><code class="language-plaintext highlighter-rouge">生成式对抗网络（GAN, Generative Adversarial Networks ）是一种深度学习模型，
+是近年来复杂分布上无监督学习最具前景的方法之一。模型通过框架中（至少）两个模块：
+生成模型（Generative Model）和判别模型（Discriminative Model）的互相博弈学习产生相当好的输出。
+原始 GAN 理论中，并不要求 G 和 D 都是神经网络，只需要是能拟合相应生成和判别的函数即可。
+但实用中一般均使用深度神经网络作为 G 和 D 。一个优秀的GAN应用需要有良好的训练方法，
+否则可能由于神经网络模型的自由性而导致输出不理想。</code></p>
+
+<p><img src="../pictures/GAN/GAN1.png" alt="avatar" />
+<img src="../pictures/GAN/GAN2.png" alt="avatar" />
+<img src="../pictures/GAN/GAN3.png" alt="avatar" />
+<img src="../pictures/GAN/GAN4.png" alt="avatar" />
+<img src="../pictures/GAN/GAN5.png" alt="avatar" />
+<img src="../pictures/GAN/GAN6.png" alt="avatar" />
+<img src="../pictures/GAN/GAN7.png" alt="avatar" />
+<img src="../pictures/GAN/GAN8.png" alt="avatar" />
+<img src="../pictures/GAN/GAN9.png" alt="avatar" />
+<img src="../pictures/GAN/GAN10.png" alt="avatar" />
+<img src="../pictures/GAN/GAN11.png" alt="avatar" />
+<img src="../pictures/GAN/GAN12.png" alt="avatar" />
+<img src="../pictures/GAN/GAN13.png" alt="avatar" />
+<img src="../pictures/GAN/GAN14.png" alt="avatar" />
+<img src="../pictures/GAN/GAN15.png" alt="avatar" />
+<img src="../pictures/GAN/GAN16.png" alt="avatar" />
+<img src="../pictures/GAN/GAN17.png" alt="avatar" />
+<img src="../pictures/GAN/GAN18.png" alt="avatar" />
+<img src="../pictures/GAN/GAN19.png" alt="avatar" />
+<img src="../pictures/GAN/GAN20.png" alt="avatar" />
+<img src="../pictures/GAN/GAN21.png" alt="avatar" />
+<img src="../pictures/GAN/GAN22.png" alt="avatar" />
+<img src="../pictures/GAN/GAN23.png" alt="avatar" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="k">class</span> <span class="nc">Generator</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Generator</span><span class="p">,</span> <span class="bp">self</span><span class="p">).</span><span class="n">__init__</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">block</span><span class="p">(</span><span class="n">in_feat</span><span class="p">,</span> <span class="n">out_feat</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+            <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">in_feat</span><span class="p">,</span> <span class="n">out_feat</span><span class="p">)]</span>
+            <span class="k">if</span> <span class="n">normalize</span><span class="p">:</span>
+                <span class="n">layers</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="n">out_feat</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">))</span>
+            <span class="n">layers</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">LeakyReLU</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">layers</span>
+        <span class="s">"""
+        nn.Sequential的定义来看，输入要么是orderdict,要么是一系列的模型，
+        遇到list，必须用*号进行转化，否则会报错 TypeError: list is not a Module subclass
+        形参——单个星号代表这个位置接收任意多个非关键字参数，转化成元组方式。
+        实参——如果*号加在了是实参上，代表的是将输入迭代器拆成一个个元素。
+        """</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">block</span><span class="p">(</span><span class="n">opt</span><span class="p">.</span><span class="n">latent_dim</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="bp">False</span><span class="p">),</span>
+            <span class="o">*</span><span class="n">block</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+            <span class="o">*</span><span class="n">block</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">),</span>
+            <span class="o">*</span><span class="n">block</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">1024</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">prod</span><span class="p">(</span><span class="n">img_shape</span><span class="p">))),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Tanh</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">model</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="n">img</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="o">*</span><span class="n">img_shape</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">img</span>
+
+
+<span class="k">class</span> <span class="nc">Discriminator</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Discriminator</span><span class="p">,</span> <span class="bp">self</span><span class="p">).</span><span class="n">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="p">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">prod</span><span class="p">(</span><span class="n">img_shape</span><span class="p">)),</span> <span class="mi">512</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">LeakyReLU</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">LeakyReLU</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">Sigmoid</span><span class="p">(),</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">img</span><span class="p">):</span>
+        <span class="n">img_flat</span> <span class="o">=</span> <span class="n">img</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="n">img</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">validity</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">model</span><span class="p">(</span><span class="n">img_flat</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">validity</span>
+
+
+<span class="c1"># Loss function
+</span><span class="n">adversarial_loss</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">BCELoss</span><span class="p">()</span>
+
+<span class="c1"># Initialize generator and discriminator
+</span><span class="n">generator</span> <span class="o">=</span> <span class="n">Generator</span><span class="p">()</span>
+<span class="n">discriminator</span> <span class="o">=</span> <span class="n">Discriminator</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">cuda</span><span class="p">:</span>
+    <span class="n">generator</span><span class="p">.</span><span class="n">cuda</span><span class="p">()</span>
+    <span class="n">discriminator</span><span class="p">.</span><span class="n">cuda</span><span class="p">()</span>
+    <span class="n">adversarial_loss</span><span class="p">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Configure data loader
+</span><span class="n">os</span><span class="p">.</span><span class="n">makedirs</span><span class="p">(</span><span class="s">"../../data/mnist"</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">dataloader</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">utils</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">DataLoader</span><span class="p">(</span><span class="n">datasets</span><span class="p">.</span><span class="n">MNIST</span><span class="p">(</span><span class="s">"../../data/mnist"</span><span class="p">,</span><span class="n">train</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+    <span class="n">batch_size</span><span class="o">=</span><span class="n">opt</span><span class="p">.</span><span class="n">batch_size</span><span class="p">,</span>
+    <span class="n">shuffle</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Optimizers
+</span><span class="n">optimizer_G</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">optim</span><span class="p">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">generator</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">opt</span><span class="p">.</span><span class="n">lr</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="n">opt</span><span class="p">.</span><span class="n">b1</span><span class="p">,</span> <span class="n">opt</span><span class="p">.</span><span class="n">b2</span><span class="p">))</span>
+<span class="n">optimizer_D</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">optim</span><span class="p">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">discriminator</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">opt</span><span class="p">.</span><span class="n">lr</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="n">opt</span><span class="p">.</span><span class="n">b1</span><span class="p">,</span> <span class="n">opt</span><span class="p">.</span><span class="n">b2</span><span class="p">))</span>
+
+<span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">FloatTensor</span> <span class="k">if</span> <span class="n">cuda</span> <span class="k">else</span> <span class="n">torch</span><span class="p">.</span><span class="n">FloatTensor</span>
+
+<span class="c1"># ----------
+#  Training
+# ----------
+</span>
+<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">opt</span><span class="p">.</span><span class="n">n_epochs</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">imgs</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataloader</span><span class="p">):</span>
+
+        <span class="c1"># Adversarial ground truths
+</span>        <span class="n">valid</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">Tensor</span><span class="p">(</span><span class="n">imgs</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="mi">1</span><span class="p">).</span><span class="n">fill_</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="n">fake</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">Tensor</span><span class="p">(</span><span class="n">imgs</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="mi">1</span><span class="p">).</span><span class="n">fill_</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+        <span class="c1"># Configure input
+</span>        <span class="n">real_imgs</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">imgs</span><span class="p">.</span><span class="nb">type</span><span class="p">(</span><span class="n">Tensor</span><span class="p">))</span>
+
+        <span class="c1"># -----------------
+</span>        <span class="c1">#  Train Generator
+</span>        <span class="c1"># -----------------
+</span>
+        <span class="n">optimizer_G</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+
+        <span class="c1"># Sample noise as generator input
+</span>        <span class="n">z</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">Tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="n">imgs</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">opt</span><span class="p">.</span><span class="n">latent_dim</span><span class="p">))))</span>
+
+        <span class="c1"># Generate a batch of images
+</span>        <span class="n">gen_imgs</span> <span class="o">=</span> <span class="n">generator</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+
+        <span class="c1"># Loss measures generator's ability to fool the discriminator
+</span>        <span class="n">g_loss</span> <span class="o">=</span> <span class="n">adversarial_loss</span><span class="p">(</span><span class="n">discriminator</span><span class="p">(</span><span class="n">gen_imgs</span><span class="p">),</span> <span class="n">valid</span><span class="p">)</span>
+
+        <span class="n">g_loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">optimizer_G</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>
+
+        <span class="c1"># ---------------------
+</span>        <span class="c1">#  Train Discriminator
+</span>        <span class="c1"># ---------------------
+</span>
+        <span class="n">optimizer_D</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+
+        <span class="c1"># Measure discriminator's ability to classify real from generated samples
+</span>        <span class="n">real_loss</span> <span class="o">=</span> <span class="n">adversarial_loss</span><span class="p">(</span><span class="n">discriminator</span><span class="p">(</span><span class="n">real_imgs</span><span class="p">),</span> <span class="n">valid</span><span class="p">)</span>
+        <span class="n">fake_loss</span> <span class="o">=</span> <span class="n">adversarial_loss</span><span class="p">(</span><span class="n">discriminator</span><span class="p">(</span><span class="n">gen_imgs</span><span class="p">.</span><span class="n">detach</span><span class="p">()),</span> <span class="n">fake</span><span class="p">)</span>
+        <span class="n">d_loss</span> <span class="o">=</span> <span class="p">(</span><span class="n">real_loss</span> <span class="o">+</span> <span class="n">fake_loss</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+
+        <span class="n">d_loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">optimizer_D</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>
+
+        <span class="k">print</span><span class="p">(</span>
+            <span class="s">"[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"</span>
+            <span class="o">%</span> <span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">opt</span><span class="p">.</span><span class="n">n_epochs</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataloader</span><span class="p">),</span> <span class="n">d_loss</span><span class="p">.</span><span class="n">item</span><span class="p">(),</span> <span class="n">g_loss</span><span class="p">.</span><span class="n">item</span><span class="p">())</span>
+        <span class="p">)</span>
+
+        <span class="n">batches_done</span> <span class="o">=</span> <span class="n">epoch</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataloader</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span>
+        <span class="k">if</span> <span class="n">batches_done</span> <span class="o">%</span> <span class="n">opt</span><span class="p">.</span><span class="n">sample_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">save_image</span><span class="p">(</span><span class="n">gen_imgs</span><span class="p">.</span><span class="n">data</span><span class="p">[:</span><span class="mi">25</span><span class="p">],</span> <span class="s">"images/%d.png"</span> <span class="o">%</span> <span class="n">batches_done</span><span class="p">,</span> <span class="n">nrow</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+:ET
