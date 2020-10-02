@@ -1,6 +1,6 @@
 
 #### Bert 模型结构图
-![avatar](../pictures/BERT/Bert模型结构图.png)
+![avatar](https://raw.githubusercontent.com/LoveNingBo/LoveNingBo.github.io/master/pictures/BERT/Bert%E6%A8%A1%E5%9E%8B%E7%BB%93%E6%9E%84%E5%9B%BE.png)
 
 #### 第一部分：Bert Embedding
 ```python
